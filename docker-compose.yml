@@ -1,0 +1,16 @@
+services:
+  gtasks-mcp:
+    build: .
+    container_name: gtasks-mcp
+    env_file:
+      - .env
+    expose:
+      - "8080"
+    networks:
+      - tunnel
+    restart: unless-stopped
+
+networks:
+  tunnel:
+    external: true
+    name: ${TUNNEL_NETWORK:-cloudflared}
