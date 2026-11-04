@@ -1,4 +1,7 @@
-FROM ghcr.io/astral-sh/uv:0.11.16-python3.12-bookworm-slim AS builder
+# NOTE: uv no longer publishes *-bookworm-slim tags for 0.11.x; the Debian variant is trixie-slim.
+# Docker Hub is the default registry; override with e.g. UV_BUILDER_IMAGE=ghcr.io/astral-sh/uv:0.11.16-python3.12-trixie-slim
+ARG UV_BUILDER_IMAGE=docker.io/astral/uv:0.11.16-python3.12-trixie-slim
+FROM ${UV_BUILDER_IMAGE} AS builder
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
