@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import functools
+import hmac
+import ipaddress
 import json
 import os
 import sys
@@ -30,6 +32,10 @@ __version__ = "0.1.0"
 REQUIRED_ENV = ("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REFRESH_TOKEN")
 MAX_PAGE = 100
 DEFAULT_MAX_RESULTS = 50
+DEFAULT_HOST = "0.0.0.0"
+DEFAULT_PORT = 8080
+MIN_TOKEN_LENGTH = 16
+OPEN_PATHS = ("/healthz",)
 
 mcp = FastMCP("gtasks-mcp", version=__version__)
 
@@ -516,7 +522,8 @@ async def get_due_soon(days: int = 7, include_completed: bool = False) -> dict[s
 
 
 class BearerAuthMiddleware:
-    """Pure ASGI middleware: require `Authorization: Bearer <MCP_BEARER_TOKEN>` on /mcp."""
+    """Pure ASGI middleware: require `Authorization: Bearer <MCP_BEARER_TOKEN>` on
+    every path except OPEN_PATHS (health checks stay reachable without a token)."""
 
     def __init__(self, app: Any):
         self.app = app
@@ -526,11 +533,16 @@ class BearerAuthMiddleware:
         if (
             self.token
             and scope["type"] == "http"
-            and scope.get("path", "").startswith("/mcp")
+            and scope.get("path", "") not in OPEN_PATHS
         ):
             headers = {k.lower(): v for k, v in scope.get("headers", [])}
-            auth = headers.get(b"authorization", b"").decode("latin-1")
-            if auth != f"Bearer {self.token}":
+            expected = f"Bearer {self.token}".encode("utf-8")
+            if not hmac.compare_digest(headers.get(b"authorization", b""), expected):
+                log_event(
+                    event="auth_rejected",
+                    method=scope.get("method"),
+                    path=scope.get("path"),
+                )
                 response = JSONResponse(
                     {"error": "unauthorized", "message": "Invalid or missing bearer token."},
                     status_code=401,
@@ -561,6 +573,35 @@ def load_server_env(path: str = ".env") -> dict[str, Any]:
     return {}
 
 
+def server_host() -> str:
+    return os.getenv("MCP_HOST", "").strip() or DEFAULT_HOST
+
+
+def parse_port(raw: str | None) -> int:
+    if raw is None or not raw.strip():
+        return DEFAULT_PORT
+    try:
+        port = int(raw)
+    except ValueError:
+        raise ValueError(f"MCP_PORT must be an integer, got {raw!r}.") from None
+    if not 1 <= port <= 65535:
+        raise ValueError(f"MCP_PORT must be between 1 and 65535, got {port}.")
+    return port
+
+
+def parse_list_env(name: str) -> list[str]:
+    return [item.strip() for item in os.getenv(name, "").split(",") if item.strip()]
+
+
+def is_loopback_host(host: str) -> bool:
+    if host == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
 def main() -> None:
     load_server_env()
     missing = [v for v in REQUIRED_ENV if not os.getenv(v)]
@@ -572,15 +613,58 @@ def main() -> None:
             message="Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET and GOOGLE_REFRESH_TOKEN (see auth.py).",
         )
         sys.exit(1)
-    middleware = [Middleware(BearerAuthMiddleware)] if os.getenv("MCP_BEARER_TOKEN") else []
-    log_event(event="startup", version=__version__, bearer_auth=bool(middleware))
+    host = server_host()
+    try:
+        port = parse_port(os.getenv("MCP_PORT"))
+    except ValueError as exc:
+        log_event(event="startup_failed", error="invalid_config", message=str(exc))
+        sys.exit(1)
+    token = os.getenv("MCP_BEARER_TOKEN")
+    if not token:
+        if not is_loopback_host(host):
+            log_event(
+                event="startup_failed",
+                error="missing_bearer_token",
+                message=(
+                    "MCP_BEARER_TOKEN is required when MCP_HOST is not loopback. "
+                    "Generate one with: openssl rand -hex 32"
+                ),
+            )
+            sys.exit(1)
+        log_event(
+            event="startup_warning",
+            warning="MCP_BEARER_TOKEN unset; bearer auth disabled (loopback bind only).",
+            host=host,
+        )
+    elif len(token) < MIN_TOKEN_LENGTH:
+        log_event(
+            event="startup_failed",
+            error="weak_bearer_token",
+            message=(
+                f"MCP_BEARER_TOKEN must be at least {MIN_TOKEN_LENGTH} characters. "
+                "Generate one with: openssl rand -hex 32"
+            ),
+        )
+        sys.exit(1)
+    allowed_hosts = parse_list_env("MCP_ALLOWED_HOSTS")
+    middleware = [Middleware(BearerAuthMiddleware)] if token else []
+    log_event(
+        event="startup",
+        version=__version__,
+        host=host,
+        port=port,
+        bearer_auth=bool(token),
+        allowed_hosts=allowed_hosts,
+    )
     mcp.run(
         transport="streamable-http",
-        host="0.0.0.0",
-        port=8080,
+        host=host,
+        port=port,
         path="/mcp",
         show_banner=False,
         middleware=middleware,
+        host_origin_protection=True,
+        allowed_hosts=allowed_hosts,
     )
 
 

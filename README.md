@@ -27,7 +27,10 @@ Environment variables (see `.env.example`):
 | `GOOGLE_CLIENT_ID` | yes | OAuth client ID (Desktop-app type) |
 | `GOOGLE_CLIENT_SECRET` | yes | OAuth client secret |
 | `GOOGLE_REFRESH_TOKEN` | yes | Long-lived refresh token from `auth.py` |
-| `MCP_BEARER_TOKEN` | recommended | Shared secret required as `Authorization: Bearer` on `/mcp` |
+| `MCP_BEARER_TOKEN` | yes when public | Shared secret required as `Authorization: Bearer` on every path except `/healthz`. Mandatory unless `MCP_HOST` is loopback; must be >= 16 chars. Generate with `openssl rand -hex 32` |
+| `MCP_HOST` | no | Bind address, default `0.0.0.0`. Use `127.0.0.1` for local-only access |
+| `MCP_PORT` | no | Bind port, default `8080` |
+| `MCP_ALLOWED_HOSTS` | no | Comma-separated extra `Host` headers accepted by the Host/Origin guard (`localhost`, `127.0.0.1`, `::1` are always allowed). Add your public tunnel hostname, e.g. `gtasks.example.com` |
 | `GTASKS_API_BASE` | no | Default `https://tasks.googleapis.com` (test override) |
 | `GTASKS_DEFAULT_LIST` | no | Default list id when a tool omits `tasklist_id` |
 
@@ -50,9 +53,9 @@ by this project — put it in `.env` on the server only.
 ## Run locally
 
 ```sh
-cp .env.example .env             # fill in secrets
+cp .env.example .env             # fill in secrets (MCP_BEARER_TOKEN: openssl rand -hex 32)
 uv sync
-uv run python server.py          # auto-loads ./.env; serves HTTP on 0.0.0.0:8080/mcp
+uv run python server.py          # auto-loads ./.env; serves HTTP on $MCP_HOST:$MCP_PORT/mcp (default 0.0.0.0:8080)
 curl http://127.0.0.1:8080/healthz
 ```
 
@@ -68,10 +71,34 @@ docker compose up -d --build
 ```
 
 The service joins the tunnel's compose network (`TUNNEL_NETWORK`, default
-`cloudflared`) and exposes only container port 8080. Point the existing tunnel
-route at it, e.g. `gtasks.<your-domain>` → `http://gtasks-mcp:8080`, then add a
-custom MCP connector in Vibe: URL `https://gtasks.<your-domain>/mcp` with header
+`cloudflared`) and exposes only the container port (`${MCP_PORT:-8080}`) — it is
+never published to the host. Point the existing tunnel route at it, e.g.
+`gtasks.<your-domain>` → `http://gtasks-mcp:${MCP_PORT:-8080}`, set
+`MCP_ALLOWED_HOSTS=gtasks.<your-domain>` in `.env`, then add a custom MCP connector
+in Vibe: URL `https://gtasks.<your-domain>/mcp` with header
 `Authorization: Bearer <MCP_BEARER_TOKEN>`.
+
+## Security checklist before going public
+
+- `MCP_BEARER_TOKEN` is mandatory whenever `MCP_HOST` is not loopback: the server
+  refuses to start without it (fail closed), rejects tokens shorter than 16 chars,
+  compares them in constant time, and never logs the token — only 401 events.
+- The built-in FastMCP Host/Origin guard (`host_origin_protection`) is always on:
+  requests with a `Host` other than `localhost`/`127.0.0.1`/`::1` plus
+  `MCP_ALLOWED_HOSTS` get a 421, which blocks DNS-rebinding and direct-IP probing
+  with a wrong Host header.
+- Keep the origin port firewalled: compose uses `expose`, not `ports`, so the port
+  is reachable only from the tunnel network. Do not add a public `ports:` mapping.
+- Put a Cloudflare Access (Zero Trust) policy in front of the hostname, restricted
+  to your own email — the bearer token is a static shared secret, Access adds a
+  second factor. Optionally add WAF rate-limiting rules on the route.
+- Only ever send the bearer token over HTTPS (the tunnel provides it); treat the
+  token like a password and rotate it (`openssl rand -hex 32`) if leaked.
+- `/healthz` stays unauthenticated on purpose (Docker healthcheck); it only reports
+  status/version, never secrets. Block it at the tunnel if you don't need it.
+- The Google OAuth scope is `tasks` only (read/write), nothing else; the refresh
+  token lives only in the server `.env`, which is never baked into the image.
+- The container runs as a non-root user and `.env` is injected at runtime.
 
 ## Tests
 
