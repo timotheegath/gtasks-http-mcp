@@ -36,7 +36,10 @@ Scope: `https://www.googleapis.com/auth/tasks` (read/write), nothing else.
 ## Auth bootstrap (run once, on your laptop)
 
 ```sh
-uv run python auth.py            # or: python auth.py --client-id ... --client-secret ...
+uv run python auth.py            # loads ./.env automatically if present
+uv run python auth.py --env-file ~/secrets/gtasks.env
+# or explicitly: python auth.py --client-id ... --client-secret ...
+# or via shell:  set -a; source .env; set +a; uv run python auth.py
 ```
 
 Opens the consent screen with a loopback listener on port 4466 (register

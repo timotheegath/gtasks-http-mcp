@@ -47,17 +47,46 @@ class _Handler(BaseHTTPRequestHandler):
         pass
 
 
+def load_env_file(path: str) -> dict[str, str]:
+    """Load KEY=VALUE lines from a .env file into os.environ (existing vars win)."""
+    loaded: dict[str, str] = {}
+    with open(path, encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key = key.strip().removeprefix("export ").strip()
+            value = value.strip().strip('"').strip("'")
+            if key:
+                loaded[key] = value
+                os.environ.setdefault(key, value)
+    return loaded
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Obtain a Google Tasks refresh token.")
-    parser.add_argument("--client-id", default=os.getenv("GOOGLE_CLIENT_ID"))
-    parser.add_argument("--client-secret", default=os.getenv("GOOGLE_CLIENT_SECRET"))
+    parser.add_argument(
+        "--env-file",
+        default=".env",
+        help="KEY=VALUE file to load credentials from (default: ./.env if it exists).",
+    )
+    parser.add_argument("--client-id", default=None)
+    parser.add_argument("--client-secret", default=None)
     args = parser.parse_args()
-    if not args.client_id or not args.client_secret:
-        parser.error("Provide --client-id/--client-secret or set GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET.")
+    if os.path.exists(args.env_file):
+        load_env_file(args.env_file)
+    client_id = args.client_id or os.getenv("GOOGLE_CLIENT_ID")
+    client_secret = args.client_secret or os.getenv("GOOGLE_CLIENT_SECRET")
+    if not client_id or not client_secret:
+        parser.error(
+            "Provide --client-id/--client-secret, set GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET, "
+            f"or point --env-file at a .env containing them (looked at: {args.env_file})."
+        )
 
     auth_url = AUTH_URL + "?" + urlencode(
         {
-            "client_id": args.client_id,
+            "client_id": client_id,
             "redirect_uri": REDIRECT_URI,
             "response_type": "code",
             "scope": SCOPE,
@@ -79,8 +108,8 @@ def main() -> None:
         resp = http.post(
             TOKEN_URL,
             data={
-                "client_id": args.client_id,
-                "client_secret": args.client_secret,
+                "client_id": client_id,
+                "client_secret": client_secret,
                 "code": _Handler.code,
                 "grant_type": "authorization_code",
                 "redirect_uri": REDIRECT_URI,
