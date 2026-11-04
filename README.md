@@ -67,9 +67,10 @@ cp .env.example .env             # fill in secrets
 docker compose up -d --build
 ```
 
-The service joins the tunnel's compose network (`TUNNEL_NETWORK`, default
-`cloudflared`) and exposes only container port 8080. Point the existing tunnel
-route at it, e.g. `gtasks.<your-domain>` → `http://gtasks-mcp:8080`, then add a
+The container port is published on the host loopback only (`127.0.0.1:8080`), so
+the service is not reachable from the public interface. Since cloudflared runs
+as a systemd service on the host, point its tunnel route at the loopback
+address, e.g. `gtasks.<your-domain>` → `http://127.0.0.1:8080`, then add a
 custom MCP connector in Vibe: URL `https://gtasks.<your-domain>/mcp` with header
 `Authorization: Bearer <MCP_BEARER_TOKEN>`.
 
