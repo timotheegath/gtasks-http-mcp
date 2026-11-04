@@ -15,6 +15,8 @@ from urllib.parse import parse_qs, urlencode, urlparse
 
 import httpx
 
+from google_client import load_env_file
+
 SCOPE = "https://www.googleapis.com/auth/tasks"
 PORT = 4466
 REDIRECT_URI = f"http://127.0.0.1:{PORT}"
@@ -45,23 +47,6 @@ class _Handler(BaseHTTPRequestHandler):
 
     def log_message(self, format: str, *args: object) -> None:
         pass
-
-
-def load_env_file(path: str) -> dict[str, str]:
-    """Load KEY=VALUE lines from a .env file into os.environ (existing vars win)."""
-    loaded: dict[str, str] = {}
-    with open(path, encoding="utf-8") as fh:
-        for line in fh:
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            key, _, value = line.partition("=")
-            key = key.strip().removeprefix("export ").strip()
-            value = value.strip().strip('"').strip("'")
-            if key:
-                loaded[key] = value
-                os.environ.setdefault(key, value)
-    return loaded
 
 
 def main() -> None:

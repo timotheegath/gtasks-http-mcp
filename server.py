@@ -20,6 +20,7 @@ from google_client import (
     DEFAULT_LIST_ID,
     GoogleAPIError,
     GoogleTasksClient,
+    load_env_file,
     normalize_due,
     parse_due_date,
 )
@@ -553,7 +554,15 @@ async def healthz(request: Request) -> Response:
     )
 
 
+def load_server_env(path: str = ".env") -> dict[str, Any]:
+    """Load KEY=VALUE pairs from a .env file if it exists (existing env wins)."""
+    if os.path.exists(path):
+        return load_env_file(path)
+    return {}
+
+
 def main() -> None:
+    load_server_env()
     missing = [v for v in REQUIRED_ENV if not os.getenv(v)]
     if missing:
         log_event(

@@ -28,3 +28,21 @@ def test_load_env_file_does_not_override_existing_env(tmp_path, monkeypatch):
     env_file.write_text("GOOGLE_CLIENT_ID=fromfile\n")
     auth.load_env_file(str(env_file))
     assert os.environ["GOOGLE_CLIENT_ID"] == "existing"
+
+
+def test_server_loads_dotenv_by_default(tmp_path, monkeypatch):
+    import server
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("GOOGLE_CLIENT_ID", raising=False)
+    (tmp_path / ".env").write_text("GOOGLE_CLIENT_ID=fromfile\n")
+    loaded = server.load_server_env()
+    assert loaded == {"GOOGLE_CLIENT_ID": "fromfile"}
+    assert os.environ["GOOGLE_CLIENT_ID"] == "fromfile"
+
+
+def test_server_load_server_env_missing_file(tmp_path, monkeypatch):
+    import server
+
+    monkeypatch.chdir(tmp_path)
+    assert server.load_server_env() == {}

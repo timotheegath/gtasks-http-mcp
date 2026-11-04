@@ -50,10 +50,15 @@ by this project — put it in `.env` on the server only.
 ## Run locally
 
 ```sh
+cp .env.example .env             # fill in secrets
 uv sync
-uv run python server.py          # serves streamable HTTP on 0.0.0.0:8080/mcp
+uv run python server.py          # auto-loads ./.env; serves HTTP on 0.0.0.0:8080/mcp
 curl http://127.0.0.1:8080/healthz
 ```
+
+`server.py` loads `./.env` at startup when present (real environment variables
+take precedence), same as `auth.py`. In Docker, compose injects `.env` via
+`env_file` instead — the file itself is never baked into the image.
 
 ## Deploy (Docker Compose on the VPS, behind the existing Cloudflare tunnel)
 
