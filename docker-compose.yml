@@ -9,5 +9,9 @@ services:
       - .env
     expose:
       - "${MCP_PORT:-8080}"
+    ports:
+      # Publish on loopback only: the Cloudflare Tunnel (cloudflared) runs on this
+      # host and routes tasks.gathmann.co/mcp -> http://localhost:${MCP_PORT}.
+      - "127.0.0.1:${MCP_PORT:-8080}:${MCP_PORT:-8080}"
     restart: unless-stopped
 
