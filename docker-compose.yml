@@ -1,9 +1,13 @@
 services:
   gtasks-mcp:
-    build: .
+    build:
+      args:
+        MCP_PORT: ${MCP_PORT:-8080}
     container_name: gtasks-mcp
     env_file:
       - .env
-    ports:
-      - "127.0.0.1:8080:8080"
+    expose:
+      - "${MCP_PORT:-8080}"
+    networks:
+      - tunnel
     restart: unless-stopped

@@ -469,6 +469,45 @@ def test_bearer_middleware_rejects_and_accepts(monkeypatch):
     assert called["inner"] is True
 
 
+def test_bearer_middleware_protects_all_but_open_paths(monkeypatch, capsys):
+    monkeypatch.setenv("MCP_BEARER_TOKEN", "sekret")
+
+    async def inner_app(scope, receive, send):
+        pass
+
+    async def receive():
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(message):
+        pass
+
+    mw = server.BearerAuthMiddleware(inner_app)
+    for path in ("/", "/mcp", "/anything"):
+        responses = []
+
+        async def send_collect(message):
+            responses.append(message)
+
+        scope = {"type": "http", "method": "POST", "path": path, "headers": []}
+        run(mw(scope, receive, send_collect))
+        assert responses[0]["status"] == 401, path
+    assert "auth_rejected" in capsys.readouterr().out
+
+    near_miss = {
+        "type": "http",
+        "method": "POST",
+        "path": "/mcp",
+        "headers": [(b"authorization", b"Bearer sekreg")],
+    }
+    responses = []
+
+    async def send_collect2(message):
+        responses.append(message)
+
+    run(mw(near_miss, receive, send_collect2))
+    assert responses[0]["status"] == 401
+
+
 def test_all_expected_tools_registered():
     tools = run(server.mcp.list_tools())
     names = {t.name for t in tools}
