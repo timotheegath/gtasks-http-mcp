@@ -13,7 +13,3 @@ services:
       - tunnel
     restart: unless-stopped
 
-networks:
-  tunnel:
-    external: true
-    name: ${TUNNEL_NETWORK:-cloudflared}
