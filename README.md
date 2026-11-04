@@ -32,9 +32,21 @@ Environment variables (see `.env.example`):
 | `MCP_PORT` | no | Bind port, default `8080` |
 | `MCP_ALLOWED_HOSTS` | no | Comma-separated extra `Host` headers accepted by the Host/Origin guard (`localhost`, `127.0.0.1`, `::1` are always allowed). Add your public tunnel hostname, e.g. `gtasks.example.com` |
 | `GTASKS_API_BASE` | no | Default `https://tasks.googleapis.com` (test override) |
-| `GTASKS_DEFAULT_LIST` | no | Default list id when a tool omits `tasklist_id` |
+| `GTASKS_DEFAULT_LIST` | no | Default list id when a tool omits `tasklist_id` (see "Finding a list id" below) |
 
 Scope: `https://www.googleapis.com/auth/tasks` (read/write), nothing else.
+
+## Finding a list id
+
+List ids are not shown anywhere in the Google Tasks UI. Run the helper with the same
+credentials as the server to print every list's title next to its id:
+
+```sh
+uv run python find_list_id.py            # loads ./.env automatically if present
+uv run python find_list_id.py --env-file ~/secrets/gtasks.env
+```
+
+Then set `GTASKS_DEFAULT_LIST=<id>` in your server `.env`.
 
 ## Auth bootstrap (run once, on your laptop)
 
