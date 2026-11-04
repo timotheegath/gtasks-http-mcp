@@ -29,9 +29,21 @@ Environment variables (see `.env.example`):
 | `GOOGLE_REFRESH_TOKEN` | yes | Long-lived refresh token from `auth.py` |
 | `MCP_BEARER_TOKEN` | recommended | Shared secret required as `Authorization: Bearer` on `/mcp` |
 | `GTASKS_API_BASE` | no | Default `https://tasks.googleapis.com` (test override) |
-| `GTASKS_DEFAULT_LIST` | no | Default list id when a tool omits `tasklist_id` |
+| `GTASKS_DEFAULT_LIST` | no | Default list id when a tool omits `tasklist_id` (see "Finding a list id" below) |
 
 Scope: `https://www.googleapis.com/auth/tasks` (read/write), nothing else.
+
+## Finding a list id
+
+List ids are not shown anywhere in the Google Tasks UI. Run the helper with the same
+credentials as the server to print every list's title next to its id:
+
+```sh
+uv run python find_list_id.py            # loads ./.env automatically if present
+uv run python find_list_id.py --env-file ~/secrets/gtasks.env
+```
+
+Then set `GTASKS_DEFAULT_LIST=<id>` in your server `.env`.
 
 ## Auth bootstrap (run once, on your laptop)
 
