@@ -352,8 +352,9 @@ async def create_task(
     parent_task_id: str | None = None,
 ) -> dict[str, Any]:
     """Create a task. due accepts YYYY-MM-DD, YYYY-MM-DDTHH:MM, or full RFC3339
-    (normalized to RFC3339 UTC midnight; the API discards time-of-day — put
-    time-of-day guidance in notes). parent_task_id creates a subtask.
+    (converted to RFC3339 UTC). The Google Tasks API discards the time-of-day —
+    only the date is stored, so put time-of-day guidance in notes.
+    parent_task_id creates a subtask.
     Returns the created task.  tasklist_id defaults to the GTASKS_DEFAULT_LIST env var, or Google's @default list when unset."""
     client = get_client()
     list_id = resolve_list(tasklist_id)
@@ -408,7 +409,9 @@ async def update_task(
     parent_task_id: str | None = None,
 ) -> dict[str, Any]:
     """Patch a task: only the provided fields change (patch semantics).
-    due accepts YYYY-MM-DD or RFC3339. parent_task_id re-parents the task.
+    due accepts YYYY-MM-DD, YYYY-MM-DDTHH:MM, or full RFC3339 (converted to
+    RFC3339 UTC); the Google Tasks API discards the time-of-day — only the date
+    is stored. parent_task_id re-parents the task.
     Returns the updated task.  tasklist_id defaults to the GTASKS_DEFAULT_LIST env var, or Google's @default list when unset."""
     client = get_client()
     list_id = resolve_list(tasklist_id)
